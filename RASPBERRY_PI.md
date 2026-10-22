@@ -16,7 +16,7 @@ The app isn't just static files. The calendar feeds go through Vite's proxy at `
 
 - Install Node.js. The version in the default apt repo is often too old for Vite 8, so use NodeSource or `nvm` to get Node 20 or later.
 - Copy the project over (git clone or `scp`), leaving out `node_modules`, then run `npm ci`.
-- Copy `.env.local` too. It isn't in git and it holds the feed URLs.
+- Copy `.env` too. It isn't in git and it holds the feed URLs.
 - Run `npm run build`.
 
 ## 3. Run the server as a service

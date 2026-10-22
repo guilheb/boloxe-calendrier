@@ -18,12 +18,12 @@ npm run preview   # serve the production build
 
 ## Configuration
 
-### Calendars (`.env.local`)
+### Calendars (`.env`)
 
-Calendars are declared only in `.env.local`. Each `CAL_<ID>_URL` variable adds one calendar:
+Calendars are declared only in `.env`. Each `CAL_<ID>_URL` variable adds one calendar:
 
 ```sh
-cp .env.example .env.local
+cp .env.example .env
 ```
 
 ```sh
@@ -36,14 +36,12 @@ CAL_FAMILIAL_URL=webcal://pXX-caldav.icloud.com/published/2/…
 
 - `<ID>` becomes the calendar's id in lowercase (`/feeds/guillaume`). Calendars appear in the order of the file.
 - `webcal://` links are accepted and converted to `https://`.
-- Restart the dev server after changing `.env.local` (and rebuild before `npm run preview`, since the calendar list is baked into the build).
+- Restart the dev server after changing `.env` (and rebuild before `npm run preview`, since the calendar list is baked into the build).
 - `vite.config.js` reads these variables with `calendarsFromEnv()` (`src/config.js`) and passes only the id, name and color to the page through the `__CALENDARS__` constant. The URLs never leave the Vite process.
 
-**To add a calendar:** add its `CAL_<ID>_URL` line (and optionally `_NAME` / `_COLOR`) to `.env.local`. No code change is needed.
+**To add a calendar:** add its `CAL_<ID>_URL` line (and optionally `_NAME` / `_COLOR`) to `.env`. No code change is needed.
 
 The refresh interval (`REFRESH_MINUTES`) and the default palette (`DEFAULT_COLORS`) are in `src/config.js`.
-
-**Why `.env.local` rather than `.env`:** Vite loads both, and `.env.local` overrides `.env`. By convention, `.env` holds shared defaults and is committed, while `*.local` files hold secrets and stay out of git (`.gitignore` excludes them). Private calendar links work like passwords, so they go in `.env.local`. `.env.example` is the committed template.
 
 **Why there's no `VITE_` prefix:** Vite only passes `VITE_*` variables to the browser code. Unprefixed variables are only visible to `vite.config.js`, so the feed URLs never end up in the page's JavaScript.
 
@@ -52,7 +50,7 @@ The refresh interval (`REFRESH_MINUTES`) and the default palette (`DEFAULT_COLOR
 The page never contacts the feed providers itself. It requests `/feeds/<id>`, and `vite.config.js` creates one `server.proxy` route per calendar that forwards the request to the real URL. This means:
 
 - **No CORS requirement:** the request is made by Vite in Node, not by the browser. Google Calendar and iCloud feeds work even though they don't send CORS headers.
-- **Private URLs stay private:** they live only in `.env.local` and the Vite process.
+- **Private URLs stay private:** they live only in `.env` and the Vite process.
 - **It works in both modes:** `npm run dev` and `npm run preview` use the same routes. A static host serving `dist/` alone (nginx, GitHub Pages…) has no proxy, so it would need an equivalent rule.
 
 If a feed returns something other than an iCalendar file (for example, the app's own `index.html` when the route is missing), the page shows an error on that calendar instead of failing silently.
@@ -78,9 +76,9 @@ There's no router, state library (Pinia), UI kit, CSS framework or date library.
 
 ```
 src/
-  config.js                    refresh interval, default colors, .env.local → calendars
-vite.config.js                 /feeds/<id> proxy routes built from .env.local
-.env.example                   template for .env.local (calendars)
+  config.js                    refresh interval, default colors, .env → calendars
+vite.config.js                 /feeds/<id> proxy routes built from .env
+.env.example                   template for .env (calendars)
   main.js / App.vue            entry + grid layout, view state (date, mode)
   style.css                    color variables, light/dark theme, shared classes
   composables/useCalendars.js  fetching, parsing, polling, selection
@@ -100,7 +98,7 @@ vite.config.js                 /feeds/<id> proxy routes built from .env.local
 
 `useCalendars.js` keeps its state at module level, outside the function. Every component that calls `useCalendars()` therefore shares the same refs, so all four panels see the same data without Pinia or provide/inject.
 
-- `calendars`: the feeds from `.env.local`, plus runtime fields (`visible`, `error`, `loaded`).
+- `calendars`: the feeds from `.env`, plus runtime fields (`visible`, `error`, `loaded`).
 - `eventsByCalendar`: the parsed events for each feed.
 - `events`: a computed list of every visible event, merged and sorted. All panels read this.
 - `selectedEvent`: looked up by id, so a selected event stays selected after a refresh. Each occurrence's id is `calendarId|UID|start`, which stays the same between downloads.

@@ -7,7 +7,7 @@ export const DEFAULT_COLORS = ['#1badf8', '#ffcc00', '#63da38', '#ff2968', '#cc7
 export const feedEnvVar = (id) => `CAL_${id.toUpperCase()}_URL`
 export const feedPath = (id) => `/feeds/${id}`
 
-// Subscribed calendars are declared only in .env.local: every CAL_<ID>_URL is one
+// Subscribed calendars are declared only in .env: every CAL_<ID>_URL is one
 // calendar, with optional CAL_<ID>_NAME and CAL_<ID>_COLOR. When NAME is omitted, the
 // feed's X-WR-CALNAME is used. The URL is left out of the result: it is served by the
 // Vite proxy at /feeds/<id>, so it never reaches the browser and CORS doesn't apply.

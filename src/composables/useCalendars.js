@@ -19,7 +19,7 @@ function textOn(hex) {
   return (l + 0.05) / 0.05 > 1.05 / (l + 0.05) ? '#1c1c1e' : '#fff'
 }
 
-// Calendars found in .env.local, injected by vite.config.js (see calendarsFromEnv).
+// Calendars found in .env, injected by vite.config.js (see calendarsFromEnv).
 const CALENDARS = __CALENDARS__
 
 // Module-level state: every component calling useCalendars() shares it.
@@ -117,7 +117,7 @@ async function loadCalendar(cal) {
     const text = await res.text()
     // Without a proxy route, Vite answers with the app's index.html instead of a 404.
     if (!text.trimStart().startsWith('BEGIN:VCALENDAR')) {
-      throw new Error(`flux introuvable — vérifier ${feedEnvVar(cal.id)} dans .env.local`)
+      throw new Error(`flux introuvable — vérifier ${feedEnvVar(cal.id)} dans .env`)
     }
     const { name, events } = parseIcs(text, cal)
     eventsByCalendar.value = { ...eventsByCalendar.value, [cal.id]: events }
