@@ -1,0 +1,10 @@
+node_modules
+dist
+.git
+.idea
+# Feed URLs are passed at runtime with --env-file, never copied into the image.
+.env
+.env.*
+!.env.example
+Dockerfile
+.dockerignore

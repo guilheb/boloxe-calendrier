@@ -22,11 +22,13 @@ export default defineConfig(({ mode }) => {
   // '' prefix loads every variable, not only VITE_*; none of them are exposed to the client.
   const env = loadEnv(mode, process.cwd(), '')
   const calendars = calendarsFromEnv(env)
-  if (!calendars.length) console.warn('[feeds] No CAL_<ID>_URL in .env.local — no calendar will load.')
+  if (!calendars.length) console.warn('[feeds] No CAL_<ID>_URL in .env — no calendar will load.')
   return {
     plugins: [vue()],
     // Only id, name and color reach the page; the URLs stay in this process.
     define: { __CALENDARS__: JSON.stringify(calendars) },
-    server: { proxy: feedProxies(env, calendars) },
+    // Any Host is answered: in production the reverse proxy (Traefik) decides which hosts
+    // reach the app. `preview` inherits both settings.
+    server: { proxy: feedProxies(env, calendars), allowedHosts: true },
   }
 })
