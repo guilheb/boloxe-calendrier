@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 import ICAL from 'ical.js'
-import { CALENDARS, REFRESH_MINUTES, feedPath, feedEnvVar } from '../config'
+import { REFRESH_MINUTES, feedPath, feedEnvVar } from '../config'
 import { addDays, DAY_MS } from '../utils/date'
 import { describeRecurrence } from '../utils/recurrence'
 
@@ -18,6 +18,9 @@ function textOn(hex) {
   const l = 0.2126 * channel(0) + 0.7152 * channel(1) + 0.0722 * channel(2)
   return (l + 0.05) / 0.05 > 1.05 / (l + 0.05) ? '#1c1c1e' : '#fff'
 }
+
+// Calendars found in .env.local, injected by vite.config.js (see calendarsFromEnv).
+const CALENDARS = __CALENDARS__
 
 // Module-level state: every component calling useCalendars() shares it.
 const calendars = ref(

@@ -18,23 +18,9 @@ npm run preview   # serve the production build
 
 ## Configuration
 
-### Calendars
+### Calendars (`.env.local`)
 
-Calendars are declared in `src/config.js`, without their URLs:
-
-```js
-export const REFRESH_MINUTES = 5
-export const CALENDARS = [
-  { id: 'guillaume', name: 'Guillaume', color: '#1badf8' },
-  { id: 'familial',  name: 'Familial',  color: '#ffcc00' },
-]
-```
-
-`name` is optional; if you leave it out, the feed's `X-WR-CALNAME` is used.
-
-### Feed URLs (`.env.local`)
-
-Each calendar's URL goes in `.env.local` as `CAL_<ID>_URL`:
+Calendars are declared only in `.env.local`. Each `CAL_<ID>_URL` variable adds one calendar:
 
 ```sh
 cp .env.example .env.local
@@ -42,14 +28,20 @@ cp .env.example .env.local
 
 ```sh
 CAL_GUILLAUME_URL=webcal://pXX-caldav.icloud.com/published/2/…
+CAL_GUILLAUME_NAME=Guillaume      # optional: the feed's X-WR-CALNAME otherwise
+CAL_GUILLAUME_COLOR=#1badf8       # optional: next color of DEFAULT_COLORS otherwise
+
 CAL_FAMILIAL_URL=webcal://pXX-caldav.icloud.com/published/2/…
 ```
 
+- `<ID>` becomes the calendar's id in lowercase (`/feeds/guillaume`). Calendars appear in the order of the file.
 - `webcal://` links are accepted and converted to `https://`.
-- Restart the dev server after changing `.env.local`.
-- Missing variables are reported in the terminal when Vite starts. In the page, that calendar's chip turns red with a ⚠.
+- Restart the dev server after changing `.env.local` (and rebuild before `npm run preview`, since the calendar list is baked into the build).
+- `vite.config.js` reads these variables with `calendarsFromEnv()` (`src/config.js`) and passes only the id, name and color to the page through the `__CALENDARS__` constant. The URLs never leave the Vite process.
 
-**To add a calendar:** add an entry to `CALENDARS`, then add its `CAL_<ID>_URL` line to `.env.local`.
+**To add a calendar:** add its `CAL_<ID>_URL` line (and optionally `_NAME` / `_COLOR`) to `.env.local`. No code change is needed.
+
+The refresh interval (`REFRESH_MINUTES`) and the default palette (`DEFAULT_COLORS`) are in `src/config.js`.
 
 **Why `.env.local` rather than `.env`:** Vite loads both, and `.env.local` overrides `.env`. By convention, `.env` holds shared defaults and is committed, while `*.local` files hold secrets and stay out of git (`.gitignore` excludes them). Private calendar links work like passwords, so they go in `.env.local`. `.env.example` is the committed template.
 
@@ -86,9 +78,9 @@ There's no router, state library (Pinia), UI kit, CSS framework or date library.
 
 ```
 src/
-  config.js                    calendars (id, name, color), refresh interval
+  config.js                    refresh interval, default colors, .env.local → calendars
 vite.config.js                 /feeds/<id> proxy routes built from .env.local
-.env.example                   template for .env.local (feed URLs)
+.env.example                   template for .env.local (calendars)
   main.js / App.vue            entry + grid layout, view state (date, mode)
   style.css                    color variables, light/dark theme, shared classes
   composables/useCalendars.js  fetching, parsing, polling, selection
@@ -108,7 +100,7 @@ vite.config.js                 /feeds/<id> proxy routes built from .env.local
 
 `useCalendars.js` keeps its state at module level, outside the function. Every component that calls `useCalendars()` therefore shares the same refs, so all four panels see the same data without Pinia or provide/inject.
 
-- `calendars`: the feeds from `config.js`, plus runtime fields (`visible`, `error`, `loaded`).
+- `calendars`: the feeds from `.env.local`, plus runtime fields (`visible`, `error`, `loaded`).
 - `eventsByCalendar`: the parsed events for each feed.
 - `events`: a computed list of every visible event, merged and sorted. All panels read this.
 - `selectedEvent`: looked up by id, so a selected event stays selected after a refresh. Each occurrence's id is `calendarId|UID|start`, which stays the same between downloads.
@@ -141,7 +133,7 @@ vite.config.js                 /feeds/<id> proxy routes built from .env.local
   - Width is `100% / column count` and the horizontal position is `column / count`. This is the same simple approach Google and Apple use.
   - Vertical position and height come from `HOUR_PX`.
 - **Language:** the interface is in French. Dates are formatted with `Intl.DateTimeFormat` and `Intl.RelativeTimeFormat` using the `LOCALE` constant (`'fr-CA'`) in `utils/date.js`, which gives "mar. 6 oct.", "20 h 00" and "dans 11 heures". `Intl` returns lowercase French ("mardi", "octobre 2026"), so headings go through `capitalize()`. Event titles and notes come from the feeds and stay in their original language.
-- **Theme:** colors are CSS variables in `style.css`, with a dark palette under `prefers-color-scheme: dark`. Shades of each calendar's color are made with `color-mix()`, so a new feed only needs one base color in `config.js`.
+- **Theme:** colors are CSS variables in `style.css`, with a dark palette under `prefers-color-scheme: dark`. Shades of each calendar's color are made with `color-mix()`, so a new feed only needs one base color (`CAL_<ID>_COLOR` or the default palette).
 - **Event notes** are HTML-escaped first and links are added afterwards. Feed text is untrusted, so this keeps the `v-html` safe from injection.
 
 ## Limits
