@@ -1,4 +1,4 @@
-# boloxe-cal
+# boloxe-wallcal
 
 A Vue 3 page that subscribes to several ICS calendar feeds, refreshes them every few minutes, and shows them in four panels:
 
