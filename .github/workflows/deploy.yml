@@ -42,12 +42,6 @@ jobs:
             echo "Pulling latest image..."
             docker compose pull
             
-            echo "Building image..."
-            docker compose build
-            
-            echo "Stopping old container..."
-            docker compose down
-            
             echo "Starting new container..."
             docker compose up -d
             
