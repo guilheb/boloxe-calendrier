@@ -2,7 +2,7 @@
 
 Goal: the Pi boots straight into a full-screen browser showing the calendar.
 
-The app isn't just static files. The calendar feeds go through Vite's proxy at `/feeds/<id>` (see `vite.config.js`), which keeps the private feed URLs out of the browser and avoids CORS. So the Pi has to run a small server alongside the browser. `vite preview` does that, because it reuses the same proxy routes.
+The app is static files: the page loads the calendars from boloxe-api (see the README). The Pi can simply open the deployed site (`https://boloxe.com/calendrier/`); the steps below serve a local copy instead, with `vite preview`.
 
 ## 1. Set up the Pi
 
@@ -16,7 +16,7 @@ The app isn't just static files. The calendar feeds go through Vite's proxy at `
 
 - Install Node.js. The version in the default apt repo is often too old for Vite 8, so use NodeSource or `nvm` to get Node 20 or later.
 - Copy the project over (git clone or `scp`), leaving out `node_modules`, then run `npm ci`.
-- Copy `.env` too. It isn't in git and it holds the feed URLs.
+- Copy `.env` too. It isn't in git and it holds the API key, which the build puts in the page.
 - Run `npm run build`.
 
 ## 3. Run the server as a service
@@ -29,7 +29,7 @@ The app isn't just static files. The calendar feeds go through Vite's proxy at `
 - Recent Raspberry Pi OS uses Wayland with the **labwc** window manager. Add a line like this to `~/.config/labwc/autostart`:
 
   ```
-  chromium-browser --kiosk --noerrdialogs --disable-infobars --incognito http://localhost:4173 &
+  chromium-browser --kiosk --noerrdialogs --disable-infobars --incognito http://localhost:4173/calendrier/ &
   ```
 
 - `--incognito` stops Chromium from showing a "restore pages?" bar after a power cut.
@@ -45,4 +45,4 @@ The app isn't just static files. The calendar feeds go through Vite's proxy at `
 ## Other options
 
 - **Smaller setup:** run Raspberry Pi OS Lite with only `cage`, a minimal Wayland kiosk compositor, plus Chromium instead of the full desktop. It boots faster but takes more setup.
-- **No Node on the Pi:** build the app on your PC and serve `dist/` with Caddy or nginx, configured to proxy `/feeds/*` to the calendar URLs. It's lighter at runtime, but the proxy rules would then live in two places.
+- **No Node on the Pi:** build the app on your PC and serve `dist/` with Caddy or nginx (at `/calendrier/`). It's lighter at runtime.

@@ -1,0 +1,18 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "boloxe-calendrier",
+  "compatibility_date": "2026-10-26",
+  "routes": [
+    {
+      "pattern": "boloxe.com/calendrier*",
+      "zone_name": "boloxe.com"
+    },
+    {
+      "pattern": "www.boloxe.com/calendrier*",
+      "zone_name": "boloxe.com"
+    }
+  ],
+  "assets": {
+    "directory": "./dist"
+  }
+}

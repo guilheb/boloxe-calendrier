@@ -13,7 +13,7 @@ const mode = defineModel('mode', { type: String, default: 'month' })
 defineProps({ selected: Object })
 const emit = defineEmits(['select'])
 
-const { calendars, toggleCalendar, loading, lastUpdated, refresh } = useCalendars()
+const { calendars, listError, toggleCalendar, loading, lastUpdated, refresh } = useCalendars()
 
 const title = computed(() => {
   if (mode.value === 'month') return capitalize(formatMonthYear(date.value))
@@ -61,12 +61,15 @@ function showWeek(day) {
 
         <button
           class="sync"
-          :class="{ spinning: loading }"
-          :title="`Actualisé toutes les ${REFRESH_MINUTES} min — cliquer pour actualiser maintenant`"
+          :class="{ spinning: loading, error: listError }"
+          :title="listError
+            ? `Liste des calendriers introuvable : ${listError} — cliquer pour réessayer`
+            : `Actualisé toutes les ${REFRESH_MINUTES} min — cliquer pour actualiser maintenant`"
           @click="refresh"
         >
           <span class="spin">⟳</span>
-          <span>{{ lastUpdated ? formatTime(lastUpdated) : 'Chargement…' }}</span>
+          <span v-if="listError">Erreur ⚠</span>
+          <span v-else>{{ lastUpdated ? formatTime(lastUpdated) : 'Chargement…' }}</span>
         </button>
       </div>
     </header>
@@ -186,6 +189,10 @@ h2 {
   border-radius: 8px;
   font-size: 12px;
   color: var(--muted);
+}
+
+.sync.error {
+  color: var(--danger);
 }
 
 .sync:hover {

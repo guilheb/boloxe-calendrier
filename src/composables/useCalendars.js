@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 import ICAL from 'ical.js'
-import { REFRESH_MINUTES, feedPath, feedEnvVar } from '../config'
+import { REFRESH_MINUTES, API_URL, API_KEY, feedUrl } from '../config'
 import { addDays, DAY_MS } from '../utils/date'
 import { describeRecurrence } from '../utils/recurrence'
 
@@ -19,20 +19,10 @@ function textOn(hex) {
   return (l + 0.05) / 0.05 > 1.05 / (l + 0.05) ? '#1c1c1e' : '#fff'
 }
 
-// Calendars found in .env, injected by vite.config.js (see calendarsFromEnv).
-const CALENDARS = __CALENDARS__
-
 // Module-level state: every component calling useCalendars() shares it.
-const calendars = ref(
-  CALENDARS.map((c) => ({
-    ...c,
-    name: c.name ?? c.id,
-    onColor: textOn(c.color),
-    visible: true,
-    error: null,
-    loaded: false,
-  })),
-)
+const calendars = ref([])
+// Why the calendar list couldn't be loaded, if it failed.
+const listError = ref(null)
 const eventsByCalendar = ref({})
 const loading = ref(false)
 const lastUpdated = ref(null)
@@ -40,6 +30,7 @@ const nextRefresh = ref(null)
 const now = ref(new Date())
 const selectedId = ref(null)
 
+let listLoaded = false
 let refreshTimer = null
 let clockTimer = null
 let users = 0
@@ -110,18 +101,33 @@ function parseIcs(text, cal) {
   return { name: feedName, events }
 }
 
+async function fetchApi(url) {
+  const res = await fetch(url, { cache: 'no-store', headers: { 'X-Internal-Api-Key': API_KEY } })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res
+}
+
+async function loadCalendarList() {
+  const res = await fetchApi(API_URL)
+  calendars.value = (await res.json()).map((c) => ({
+    ...c,
+    name: c.name ?? c.id,
+    // A name set in the API wins over the feed's X-WR-CALNAME.
+    namedByApi: Boolean(c.name),
+    onColor: textOn(c.color),
+    visible: true,
+    error: null,
+    loaded: false,
+  }))
+}
+
 async function loadCalendar(cal) {
   try {
-    const res = await fetch(feedPath(cal.id), { cache: 'no-store' })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const text = await res.text()
-    // Without a proxy route, Vite answers with the app's index.html instead of a 404.
-    if (!text.trimStart().startsWith('BEGIN:VCALENDAR')) {
-      throw new Error(`flux introuvable — vérifier ${feedEnvVar(cal.id)} dans .env`)
-    }
-    const { name, events } = parseIcs(text, cal)
+    // The API answers 502 when the feed isn't an iCalendar file.
+    const res = await fetchApi(feedUrl(cal.id))
+    const { name, events } = parseIcs(await res.text(), cal)
     eventsByCalendar.value = { ...eventsByCalendar.value, [cal.id]: events }
-    if (!CALENDARS.find((c) => c.id === cal.id)?.name && name) cal.name = name
+    if (!cal.namedByApi && name) cal.name = name
     cal.error = null
     cal.loaded = true
   } catch (err) {
@@ -133,9 +139,19 @@ async function loadCalendar(cal) {
 async function refresh() {
   if (loading.value) return
   loading.value = true
-  await Promise.all(calendars.value.map(loadCalendar))
+  try {
+    // Fetched once; until it succeeds, every round retries it.
+    if (!listLoaded) {
+      await loadCalendarList()
+      listLoaded = true
+    }
+    listError.value = null
+    await Promise.all(calendars.value.map(loadCalendar))
+    lastUpdated.value = new Date()
+  } catch (err) {
+    listError.value = err.message || String(err)
+  }
   loading.value = false
-  lastUpdated.value = new Date()
   scheduleRefresh()
 }
 
@@ -170,6 +186,7 @@ function toggleCalendar(id) {
 export function useCalendars() {
   return {
     calendars,
+    listError,
     calendarById,
     events,
     loading,

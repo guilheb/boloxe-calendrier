@@ -11,49 +11,39 @@ A Vue 3 page that subscribes to several ICS calendar feeds, refreshes them every
 
 ```sh
 npm install
-npm run dev       # dev server
-npm run build     # production build in dist/
+npm run dev       # dev server, at /calendrier/
+npm run build     # production build in dist/calendrier/
 npm run preview   # serve the production build
 ```
 
 ## Configuration
 
-### Calendars (`.env`)
+### Calendars (boloxe-api)
 
-Calendars are declared only in `.env`. Each `CAL_<ID>_URL` variable adds one calendar:
+The calendars are declared in the environment of [boloxe-api](../boloxe-api), not here: each `CAL_<ID>_URL` there adds one calendar, with optional `CAL_<ID>_NAME` and `CAL_<ID>_COLOR`. **To add a calendar,** add it there; this app needs neither a change nor a rebuild.
+
+Its `calendrier` endpoint (`API_URL` in `src/config.js`):
+
+- without parameters, returns the list: `[{ id, name, color }]`, sorted by ID. When `name` is `null`, the feed's `X-WR-CALNAME` is used.
+- with `?id=<id>`, downloads that calendar's ICS feed and returns it (502 if it isn't an iCalendar file).
+
+Both require the `X-Internal-Api-Key` header. The page calls the API directly, so the feed providers never see the browser: the private feed URLs stay in the API, and Google Calendar and iCloud feeds work even though they don't send CORS headers. The API's CORS allows `localhost` and `*.boloxe.com`.
+
+### API key (`.env`)
 
 ```sh
 cp .env.example .env
 ```
 
-```sh
-CAL_GUILLAUME_URL=webcal://pXX-caldav.icloud.com/published/2/…
-CAL_GUILLAUME_NAME=Guillaume      # optional: the feed's X-WR-CALNAME otherwise
-CAL_GUILLAUME_COLOR=#1badf8       # optional: next color of DEFAULT_COLORS otherwise
+`VITE_CALENDAR_API_KEY` is the API's `INTERNAL_API_KEY`. Vite reads it at build time and puts it in the page's JavaScript: anyone who can open the page can read it. That's acceptable because the page is behind Cloudflare Access. Restart `npm run dev` or rebuild after changing it.
 
-CAL_FAMILIAL_URL=webcal://pXX-caldav.icloud.com/published/2/…
-```
+The refresh interval (`REFRESH_MINUTES`) is in `src/config.js`.
 
-- `<ID>` becomes the calendar's id in lowercase (`/feeds/guillaume`). Calendars appear in the order of the file.
-- `webcal://` links are accepted and converted to `https://`.
-- Restart the dev server after changing `.env` (and rebuild before `npm run preview`, since the calendar list is baked into the build).
-- `vite.config.js` reads these variables with `calendarsFromEnv()` (`src/config.js`) and passes only the id, name and color to the page through the `__CALENDARS__` constant. The URLs never leave the Vite process.
+### Deployment
 
-**To add a calendar:** add its `CAL_<ID>_URL` line (and optionally `_NAME` / `_COLOR`) to `.env`. No code change is needed.
+The page is static and served by Cloudflare Workers (static assets only, no Worker script) at `boloxe.com/calendrier` and `www.boloxe.com/calendrier` (`wrangler.jsonc`). Workers maps a request path to the same path in the assets directory, so Vite builds with `base: '/calendrier/'` into `dist/calendrier/`, and `wrangler.jsonc` uploads `dist/`.
 
-The refresh interval (`REFRESH_MINUTES`) and the default palette (`DEFAULT_COLORS`) are in `src/config.js`.
-
-**Why there's no `VITE_` prefix:** Vite only passes `VITE_*` variables to the browser code. Unprefixed variables are only visible to `vite.config.js`, so the feed URLs never end up in the page's JavaScript.
-
-### Feed proxy
-
-The page never contacts the feed providers itself. It requests `/feeds/<id>`, and `vite.config.js` creates one `server.proxy` route per calendar that forwards the request to the real URL. This means:
-
-- **No CORS requirement:** the request is made by Vite in Node, not by the browser. Google Calendar and iCloud feeds work even though they don't send CORS headers.
-- **Private URLs stay private:** they live only in `.env` and the Vite process.
-- **It works in both modes:** `npm run dev` and `npm run preview` use the same routes. A static host serving `dist/` alone (nginx, GitHub Pages…) has no proxy, so it would need an equivalent rule.
-
-If a feed returns something other than an iCalendar file (for example, the app's own `index.html` when the route is missing), the page shows an error on that calendar instead of failing silently.
+To deploy, run `npm run build` (it puts the key from `.env` in the page), then `npx wrangler deploy` (`npx wrangler login` the first time). Cloudflare Access protecting `/calendrier` is configured in the Cloudflare dashboard, not here.
 
 Week-view settings are at the top of `src/components/WeekView.vue`:
 
@@ -76,9 +66,10 @@ There's no router, state library (Pinia), UI kit, CSS framework or date library.
 
 ```
 src/
-  config.js                    refresh interval, default colors, .env → calendars
-vite.config.js                 /feeds/<id> proxy routes built from .env
-.env.example                   template for .env (calendars)
+  config.js                    refresh interval, API URL and key
+vite.config.js                 base path and output in dist/calendrier/
+wrangler.jsonc                 Cloudflare Workers: routes, dist/ as static assets
+.env.example                   template for .env (API key)
   main.js / App.vue            entry + grid layout, view state (date, mode)
   style.css                    color variables, light/dark theme, shared classes
   composables/useCalendars.js  fetching, parsing, polling, selection
@@ -98,7 +89,7 @@ vite.config.js                 /feeds/<id> proxy routes built from .env
 
 `useCalendars.js` keeps its state at module level, outside the function. Every component that calls `useCalendars()` therefore shares the same refs, so all four panels see the same data without Pinia or provide/inject.
 
-- `calendars`: the feeds from `.env`, plus runtime fields (`visible`, `error`, `loaded`).
+- `calendars`: the list from the API, plus runtime fields (`visible`, `error`, `loaded`).
 - `eventsByCalendar`: the parsed events for each feed.
 - `events`: a computed list of every visible event, merged and sorted. All panels read this.
 - `selectedEvent`: looked up by id, so a selected event stays selected after a refresh. Each occurrence's id is `calendarId|UID|start`, which stays the same between downloads.
@@ -107,7 +98,8 @@ vite.config.js                 /feeds/<id> proxy routes built from .env
 ### Fetching and polling
 
 - `startCalendarSync()` is called once from `App.vue`.
-- It downloads all feeds in parallel from `/feeds/<id>` with `fetch(…, { cache: 'no-store' })`, so the browser cache never serves an old copy.
+- The first round loads the calendar list from the API. If that fails, the refresh button shows « Erreur ⚠ » and every round retries it.
+- It downloads all feeds in parallel from the API (`?id=<id>`) with `fetch(…, { cache: 'no-store' })`, so the browser cache never serves an old copy.
 - After each round finishes, it schedules the next one with `setTimeout`. A slow round therefore can't overlap the next one, which `setInterval` could allow.
 - The refresh button calls the same `refresh()` and restarts the countdown.
 - If a feed fails, its previously loaded events are kept and its chip is outlined in red with a ⚠.
@@ -131,14 +123,14 @@ vite.config.js                 /feeds/<id> proxy routes built from .env
   - Width is `100% / column count` and the horizontal position is `column / count`. This is the same simple approach Google and Apple use.
   - Vertical position and height come from `HOUR_PX`.
 - **Language:** the interface is in French. Dates are formatted with `Intl.DateTimeFormat` and `Intl.RelativeTimeFormat` using the `LOCALE` constant (`'fr-CA'`) in `utils/date.js`, which gives "mar. 6 oct.", "20 h 00" and "dans 11 heures". `Intl` returns lowercase French ("mardi", "octobre 2026"), so headings go through `capitalize()`. Event titles and notes come from the feeds and stay in their original language.
-- **Theme:** colors are CSS variables in `style.css`, with a dark palette under `prefers-color-scheme: dark`. Shades of each calendar's color are made with `color-mix()`, so a new feed only needs one base color (`CAL_<ID>_COLOR` or the default palette).
+- **Theme:** colors are CSS variables in `style.css`, with a dark palette under `prefers-color-scheme: dark`. Shades of each calendar's color are made with `color-mix()`, so a new feed only needs one base color (from the API).
 - **Event notes** are HTML-escaped first and links are added afterwards. Feed text is untrusted, so this keeps the `v-html` safe from injection.
 
 ## Limits
 
-- **The proxy needs Vite running:** feeds only load through `npm run dev` or `npm run preview`. See [Feed proxy](#feed-proxy).
-- **No server-side cache:** every open tab downloads each feed on every refresh, through the proxy. That's fine on one home computer.
-- **Local network:** Vite listens only on `localhost` by default. If you start it with `--host`, devices on your network can open the page. They still can't see the feed URLs, but they can read the calendars through `/feeds/<id>`.
+- **The API is required:** without it (or with a wrong key), no calendar loads.
+- **No server-side cache:** every open tab downloads each feed on every refresh, through the API. That's fine on one home computer.
+- **The key is public to the page's visitors:** with it, anyone can read the calendars through the API. Cloudflare Access limits who can open the page.
 - **Nothing is saved between visits:** which calendars are hidden and the last fetched data are lost on reload. You could save them in `localStorage` with a few lines, or show cached data while offline.
 - **Time zones:** it relies on ical.js's time-zone handling. `VTIMEZONE` blocks inside the feed work. A `TZID` with no definition in the feed falls back to "floating" local time.
 - **No tests yet.** `utils/date.js` and `layoutDay()` are pure functions, so they'd be the easiest place to start with Vitest, which plugs straight into the existing Vite setup.
